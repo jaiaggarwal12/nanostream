@@ -13,6 +13,7 @@ load_dotenv()  # loads .env file in dev; no-op in production
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -59,9 +60,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.get("/")
 async def root():
-    """API root — redirect to dashboard."""
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/dashboard")
+    """Serve the main control panel dashboard."""
+    dashboard_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "dashboard.html")
+    if os.path.exists(dashboard_path):
+        with open(dashboard_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

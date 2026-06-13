@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NanoStream — Control Panel</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #1a1d27;
+  --bg3: #22263a;
+  --border: rgba(255,255,255,0.08);
+  --accent: #4f8ef7;
+  --accent2: #1dbb8b;
+  --warn: #f5a623;
+  --danger: #e95757;
+  --text: #e8eaf0;
+  --text2: #8b90a7;
+  --text3: #555a72;
+  --radius: 10px;
+  --sidebar: 220px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+/* Sidebar */
+.sidebar { width: var(--sidebar); background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; position: fixed; top: 0; left: 0; height: 100vh; z-index: 10; }
+.logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.logo h1 { font-size: 18px; font-weight: 600; color: var(--accent); }
+.logo p { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 13px; color: var(--text2); cursor: pointer; border-left: 3px solid transparent; transition: all .15s; }
+.nav-item:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(79,142,247,0.07); }
+.nav-icon { font-size: 16px; width: 20px; text-align: center; }
+.sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.status-text { font-size: 12px; color: var(--text2); }
+
+/* Main */
+.main { margin-left: var(--sidebar); flex: 1; padding: 28px; overflow-y: auto; min-height: 100vh; }
+.page { display: none; }
+.page.active { display: block; }
+.page-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+.page-sub { font-size: 13px; color: var(--text2); margin-bottom: 24px; }
+
+/* Cards */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+.card-title { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+
+/* Grid */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+
+/* Stat boxes */
+.stat { background: var(--bg3); border-radius: 8px; padding: 16px; }
+.stat-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 600; }
+.stat-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+.stat.green .stat-value { color: var(--accent2); }
+.stat.blue .stat-value { color: var(--accent); }
+.stat.warn .stat-value { color: var(--warn); }
+
+/* Forms */
+.form-group { margin-bottom: 14px; }
+label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 6px; }
+input, select, textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; transition: border-color .15s; }
+input:focus, select:focus { border-color: var(--accent); }
+select option { background: var(--bg3); }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #3a7ae0; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-success { background: var(--accent2); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+
+/* Upload zone */
+.upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 40px; text-align: center; cursor: pointer; transition: all .2s; }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(79,142,247,0.05); }
+.upload-icon { font-size: 36px; margin-bottom: 12px; }
+.upload-text { font-size: 14px; color: var(--text2); }
+.upload-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+#file-input { display: none; }
+
+/* Results / output */
+.result-box { background: var(--bg3); border-radius: 8px; padding: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.7; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+.result-box .key { color: var(--accent); }
+.result-box .val { color: var(--accent2); }
+.result-box .num { color: var(--warn); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 8px 12px; font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* Badges */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.badge-queued { background: rgba(245,166,35,.15); color: var(--warn); }
+.badge-processing { background: rgba(79,142,247,.15); color: var(--accent); }
+.badge-completed { background: rgba(29,187,139,.15); color: var(--accent2); }
+.badge-failed { background: rgba(233,87,87,.15); color: var(--danger); }
+
+/* Progress bar */
+.progress { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.progress-bar { height: 100%; border-radius: 3px; background: var(--accent); transition: width .5s ease; }
+
+/* ABR chart bars */
+.abr-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+.abr-label { min-width: 80px; color: var(--text2); font-size: 12px; }
+.abr-bar { height: 10px; border-radius: 5px; background: var(--accent); }
+.abr-val { color: var(--text3); font-size: 12px; }
+
+/* Cost comparison */
+.cost-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+.cost-label { min-width: 200px; color: var(--text2); font-size: 12px; }
+.cost-bar-wrap { flex: 1; }
+.cost-bar { height: 8px; border-radius: 4px; background: var(--accent); }
+.cost-bar.best { background: var(--accent2); }
+.cost-val { min-width: 80px; text-align: right; font-weight: 500; }
+
+/* Spinner */
+.spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Alerts */
+.alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+.alert-success { background: rgba(29,187,139,.1); border: 1px solid rgba(29,187,139,.3); color: var(--accent2); }
+.alert-error { background: rgba(233,87,87,.1); border: 1px solid rgba(233,87,87,.3); color: var(--danger); }
+.alert-info { background: rgba(79,142,247,.1); border: 1px solid rgba(79,142,247,.3); color: var(--accent); }
+
+/* Metric tag */
+.mtag { display: inline-block; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; margin: 4px; }
+.mtag .mlabel { color: var(--text3); font-size: 11px; }
+.mtag .mval { color: var(--text); font-weight: 500; font-size: 14px; }
+
+/* Responsive */
+@media(max-width:768px) {
+  .sidebar { width: 60px; }
+  .sidebar .logo h1, .sidebar .logo p, .nav-item span, .sidebar-footer .status-text { display: none; }
+  .main { margin-left: 60px; padding: 16px; }
+  .grid4 { grid-template-columns: 1fr 1fr; }
+  .grid3 { grid-template-columns: 1fr; }
+  .grid2 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="logo">
+    <h1>⚡ NanoStream</h1>
+    <p>Video Delivery Platform</p>
+  </div>
+  <div class="nav-item active" onclick="nav('overview')"><span class="nav-icon">📊</span><span>Overview</span></div>
+  <div class="nav-item" onclick="nav('analyze')"><span class="nav-icon">🔍</span><span>Analyze Video</span></div>
+  <div class="nav-item" onclick="nav('encode')"><span class="nav-icon">🎬</span><span>Encode Jobs</span></div>
+  <div class="nav-item" onclick="nav('abr')"><span class="nav-icon">📡</span><span>ABR Simulation</span></div>
+  <div class="nav-item" onclick="nav('costs')"><span class="nav-icon">💰</span><span>Cost Compare</span></div>
+  <div class="nav-item" onclick="nav('metrics')"><span class="nav-icon">📈</span><span>Metrics</span></div>
+  <div class="sidebar-footer">
+    <span class="status-dot" id="status-dot"></span>
+    <span class="status-text" id="status-text">Checking...</span>
+  </div>
+</nav>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- OVERVIEW -->
+  <div class="page active" id="page-overview">
+    <div class="page-title">Overview</div>
+    <div class="page-sub">System status and queue snapshot</div>
+    <div class="grid4" style="margin-bottom:16px">
+      <div class="stat blue"><div class="stat-label">Total Jobs</div><div class="stat-value" id="ov-total">—</div><div class="stat-sub">all time</div></div>
+      <div class="stat warn"><div class="stat-label">Queued</div><div class="stat-value" id="ov-queued">—</div><div class="stat-sub">waiting</div></div>
+      <div class="stat"><div class="stat-label">Processing</div><div class="stat-value" id="ov-processing">—</div><div class="stat-sub">encoding now</div></div>
+      <div class="stat green"><div class="stat-label">Completed</div><div class="stat-value" id="ov-completed">—</div><div class="stat-sub">done</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title">Recent Jobs</div>
+        <div id="ov-jobs"><div class="status-text" style="font-size:13px">Loading...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">System Health</div>
+        <div id="ov-health"><div class="status-text" style="font-size:13px">Loading...</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Quick Actions</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="nav('analyze')">🔍 Analyze Video</button>
+        <button class="btn btn-secondary" onclick="nav('encode')">🎬 Submit Encode Job</button>
+        <button class="btn btn-secondary" onclick="nav('abr')">📡 Run ABR Simulation</button>
+        <button class="btn btn-secondary" onclick="nav('costs')">💰 Compare Costs</button>
+        <button class="btn btn-secondary" onclick="loadOverview()">🔄 Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALYZE -->
+  <div class="page" id="page-analyze">
+    <div class="page-title">Analyze Video</div>
+    <div class="page-sub">Upload a video to detect content type, motion, and get ML encoder recommendations</div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title">Upload Video</div>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+          <div class="upload-icon">🎥</div>
+          <div class="upload-text" id="upload-filename">Drop video here or click to browse</div>
+          <div class="upload-sub">MP4, MOV, AVI, MKV — max 100 MB on free tier</div>
+        </div>
+        <input type="file" id="file-input" accept="video/*" onchange="selectFile(this.files[0])">
+        <div style="margin-top:14px">
+          <button class="btn btn-primary" id="analyze-btn" onclick="analyzeVideo()" disabled>
+            <span id="analyze-spinner" style="display:none" class="spinner"></span>
+            🔍 Analyze
+          </button>
+        </div>
+        <div id="analyze-alert" style="margin-top:12px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Analysis Results</div>
+        <div id="analyze-results" style="color:var(--text3);font-size:13px">Upload a video and click Analyze to see results here.</div>
+      </div>
+    </div>
+    <div class="card" id="ml-card" style="display:none">
+      <div class="card-title">ML Encoder Recommendation</div>
+      <div id="ml-results"></div>
+    </div>
+  </div>
+
+  <!-- ENCODE -->
+  <div class="page" id="page-encode">
+    <div class="page-title">Encode Jobs</div>
+    <div class="page-sub">Submit video encoding jobs and monitor their status</div>
+    <div class="grid2" style="margin-bottom:16px">
+      <div class="card">
+        <div class="card-title">Submit New Job</div>
+        <div class="form-group">
+          <label>Video Path (on server)</label>
+          <input type="text" id="enc-path" placeholder="e.g. /app/uploads/video.mp4">
+        </div>
+        <div class="grid2">
+          <div class="form-group">
+            <label>Codec</label>
+            <select id="enc-codec">
+              <option value="h265">H.265 (HEVC)</option>
+              <option value="h264">H.264 (AVC)</option>
+              <option value="av1">AV1</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Max Resolution</label>
+            <select id="enc-res">
+              <option value="1080p">1080p</option>
+              <option value="720p">720p</option>
+              <option value="480p">480p</option>
+              <option value="4k">4K</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="submitEncodeJob()">
+          <span id="enc-spinner" style="display:none" class="spinner"></span>
+          🎬 Submit Job
+        </button>
+        <div id="enc-alert" style="margin-top:12px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Queue Stats</div>
+        <div id="queue-stats" style="color:var(--text3);font-size:13px">Loading...</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>All Jobs</span>
+        <div style="display:flex;gap:8px">
+          <select id="job-filter" onchange="loadJobs()" style="width:auto;padding:5px 10px;font-size:12px">
+            <option value="">All</option>
+            <option value="queued">Queued</option>
+            <option value="processing">Processing</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+          </select>
+          <button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="loadJobs()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div id="jobs-table"><div style="color:var(--text3);font-size:13px">Loading jobs...</div></div>
+    </div>
+  </div>
+
+  <!-- ABR -->
+  <div class="page" id="page-abr">
+    <div class="page-title">ABR Simulation</div>
+    <div class="page-sub">Simulate adaptive bitrate behavior across different network conditions</div>
+    <div class="card">
+      <div class="card-title">Video Variants</div>
+      <div id="abr-variants">
+        <div class="grid4" id="variant-list"></div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="runABR()">
+        <span id="abr-spinner" style="display:none" class="spinner"></span>
+        📡 Run Simulation
+      </button>
+      <div id="abr-alert" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="abr-results-card" style="display:none">
+      <div class="card-title">Simulation Results</div>
+      <div id="abr-results"></div>
+    </div>
+  </div>
+
+  <!-- COSTS -->
+  <div class="page" id="page-costs">
+    <div class="page-title">Cost Comparison</div>
+    <div class="page-sub">Compare storage and bandwidth costs across AWS, GCP, Azure, and Cloudflare for different codecs</div>
+    <div class="card">
+      <div class="card-title">Parameters</div>
+      <div class="grid3">
+        <div class="form-group">
+          <label>Video Size (GB)</label>
+          <input type="number" id="cost-size" value="1.5" step="0.1" min="0.1">
+        </div>
+        <div class="form-group">
+          <label>Duration (minutes)</label>
+          <input type="number" id="cost-duration" value="120" min="1">
+        </div>
+        <div class="form-group">
+          <label>Monthly Views</label>
+          <input type="number" id="cost-views" value="10000" min="1">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="runCostCompare()">
+        <span id="cost-spinner" style="display:none" class="spinner"></span>
+        💰 Compare Costs
+      </button>
+      <div id="cost-alert" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="cost-results-card" style="display:none">
+      <div class="card-title">Cost Ranking — Annual (cheapest first)</div>
+      <div id="cost-results"></div>
+    </div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="page" id="page-metrics">
+    <div class="page-title">Prometheus Metrics</div>
+    <div class="page-sub">Live metrics from the /metrics endpoint</div>
+    <div class="card">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Raw Metrics Output</span>
+        <button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="loadMetrics()">🔄 Refresh</button>
+      </div>
+      <div class="result-box" id="metrics-output" style="min-height:300px;color:var(--text2)">Loading metrics...</div>
+    </div>
+    <div class="grid3" id="metrics-cards" style="margin-top:16px"></div>
+  </div>
+
+</main>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+const API = '';  // same origin
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+function nav(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  const items = document.querySelectorAll('.nav-item');
+  const map = {overview:0,analyze:1,encode:2,abr:3,costs:4,metrics:5};
+  if(map[page] !== undefined) items[map[page]].classList.add('active');
+  if(page==='overview') loadOverview();
+  if(page==='encode') { loadJobs(); loadQueueStats(); }
+  if(page==='metrics') loadMetrics();
+}
+
+// ── Health check ─────────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(API + '/health');
+    const d = await r.json();
+    document.getElementById('status-dot').style.background = r.ok ? 'var(--accent2)' : 'var(--danger)';
+    document.getElementById('status-text').textContent = r.ok ? 'API Online' : 'API Error';
+    return d;
+  } catch(e) {
+    document.getElementById('status-dot').style.background = 'var(--danger)';
+    document.getElementById('status-text').textContent = 'Offline';
+    return null;
+  }
+}
+
+// ── Overview ─────────────────────────────────────────────────────────────────
+async function loadOverview() {
+  const health = await checkHealth();
+  if(health) {
+    const s = health.queue_stats || {};
+    document.getElementById('ov-total').textContent = s.total ?? '—';
+    document.getElementById('ov-queued').textContent = s.queued ?? '—';
+    document.getElementById('ov-processing').textContent = s.processing ?? '—';
+    document.getElementById('ov-completed').textContent = s.completed ?? '—';
+    document.getElementById('ov-health').innerHTML = `
+      <div class="alert alert-success">✓ API is healthy</div>
+      <div class="mtag"><div class="mlabel">Backend</div><div class="mval">${s.backend || 'json'}</div></div>
+      <div class="mtag"><div class="mlabel">Redis</div><div class="mval">${s.redis_available ? '✓ Connected' : '✗ Fallback'}</div></div>
+      <div class="mtag"><div class="mlabel">Failed Jobs</div><div class="mval">${s.failed ?? 0}</div></div>
+    `;
+  } else {
+    document.getElementById('ov-health').innerHTML = '<div class="alert alert-error">✗ API unreachable</div>';
+  }
+  // Recent jobs
+  try {
+    const r = await fetch(API + '/jobs');
+    const jobs = await r.json();
+    const recent = Array.isArray(jobs) ? jobs.slice(0,5) : [];
+    if(recent.length === 0) {
+      document.getElementById('ov-jobs').innerHTML = '<div style="color:var(--text3);font-size:13px">No jobs yet. Submit one from the Encode tab.</div>';
+    } else {
+      document.getElementById('ov-jobs').innerHTML = recent.map(j => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div>
+            <div style="font-size:13px;font-weight:500">${j.job_id}</div>
+            <div style="font-size:11px;color:var(--text3)">${j.codec?.toUpperCase()} · ${j.created_at?.substring(0,16)}</div>
+          </div>
+          <span class="badge badge-${j.status}">${j.status}</span>
+        </div>
+      `).join('');
+    }
+  } catch(e) {
+    document.getElementById('ov-jobs').innerHTML = '<div style="color:var(--text3);font-size:13px">Could not load jobs.</div>';
+  }
+}
+
+// ── Analyze ───────────────────────────────────────────────────────────────────
+let selectedFile = null;
+function selectFile(file) {
+  if(!file) return;
+  selectedFile = file;
+  document.getElementById('upload-filename').textContent = `📎 ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+  document.getElementById('upload-zone').style.borderColor = 'var(--accent)';
+  document.getElementById('analyze-btn').disabled = false;
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if(file && file.type.startsWith('video/')) selectFile(file);
+}
+
+async function analyzeVideo() {
+  if(!selectedFile) return;
+  const btn = document.getElementById('analyze-btn');
+  const spinner = document.getElementById('analyze-spinner');
+  btn.disabled = true; spinner.style.display = 'inline-block';
+  document.getElementById('analyze-alert').innerHTML = '<div class="alert alert-info">⏳ Uploading and analyzing... this may take 30-60s</div>';
+  document.getElementById('analyze-results').innerHTML = '<div style="color:var(--text3)">Analyzing...</div>';
+  try {
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    const r = await fetch(API + '/analyze', { method: 'POST', body: fd });
+    if(!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    renderAnalysis(d);
+    document.getElementById('analyze-alert').innerHTML = '<div class="alert alert-success">✓ Analysis complete</div>';
+  } catch(e) {
+    document.getElementById('analyze-alert').innerHTML = `<div class="alert alert-error">✗ ${e.message}</div>`;
+    document.getElementById('analyze-results').innerHTML = '<div style="color:var(--text3)">Failed.</div>';
+  }
+  btn.disabled = false; spinner.style.display = 'none';
+}
+
+function renderAnalysis(d) {
+  const a = d.analysis || {};
+  const m = a.metrics || {};
+  document.getElementById('analyze-results').innerHTML = `
+    <div class="grid2" style="gap:10px;margin-bottom:12px">
+      <div class="stat"><div class="stat-label">Content Type</div><div class="stat-value" style="font-size:18px;color:var(--accent)">${(a.content_type||'—').toUpperCase()}</div></div>
+      <div class="stat"><div class="stat-label">Resolution</div><div class="stat-value" style="font-size:18px">${a.width||'—'}×${a.height||'—'}</div></div>
+    </div>
+    <div class="mtag"><div class="mlabel">FPS</div><div class="mval">${a.fps||'—'}</div></div>
+    <div class="mtag"><div class="mlabel">Duration</div><div class="mval">${a.duration_seconds ? a.duration_seconds.toFixed(1)+'s' : '—'}</div></div>
+    <div class="mtag"><div class="mlabel">Frames</div><div class="mval">${(a.total_frames||0).toLocaleString()}</div></div>
+    <div style="margin-top:12px">
+      ${metricBar('Motion Score', m.motion, 10)}
+      ${metricBar('Color Variance', m.color_variance, 100)}
+      ${metricBar('Edge Density', m.edge_density, 0.1)}
+      ${metricBar('Scene Cut Rate', m.scene_cut_rate, 50)}
+    </div>
+  `;
+  if(d.recommendation) {
+    const rec = d.recommendation;
+    document.getElementById('ml-card').style.display = 'block';
+    document.getElementById('ml-results').innerHTML = `
+      <div class="grid3" style="gap:10px">
+        <div class="stat green"><div class="stat-label">Recommended Codec</div><div class="stat-value">${(rec.recommended_codec||'—').toUpperCase()}</div></div>
+        <div class="stat blue"><div class="stat-label">Confidence</div><div class="stat-value">${rec.confidence ? (rec.confidence*100).toFixed(0)+'%' : '—'}</div></div>
+        <div class="stat"><div class="stat-label">Predicted Ratio</div><div class="stat-value">${rec.predicted_compression_ratio ? rec.predicted_compression_ratio.toFixed(2)+'×' : '—'}</div></div>
+      </div>
+      <div style="margin-top:12px;font-size:13px;color:var(--text2)">${rec.rationale||''}</div>
+    `;
+  }
+}
+
+function metricBar(label, val, max) {
+  const pct = val ? Math.min(100, (val/max)*100) : 0;
+  return `<div class="abr-row"><div class="abr-label">${label}</div><div class="abr-bar" style="width:${Math.max(4,pct*1.8)}px"></div><div class="abr-val">${val ? val.toFixed(3) : '—'}</div></div>`;
+}
+
+// ── Encode ────────────────────────────────────────────────────────────────────
+async function submitEncodeJob() {
+  const path = document.getElementById('enc-path').value.trim();
+  if(!path) { document.getElementById('enc-alert').innerHTML = '<div class="alert alert-error">Video path required</div>'; return; }
+  const codec = document.getElementById('enc-codec').value;
+  const res = document.getElementById('enc-res').value;
+  const spinner = document.getElementById('enc-spinner');
+  spinner.style.display = 'inline-block';
+  try {
+    const url = `${API}/encode?video_path=${encodeURIComponent(path)}&codec=${codec}&max_resolution=${res}`;
+    const r = await fetch(url, { method: 'POST' });
+    if(!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    document.getElementById('enc-alert').innerHTML = `<div class="alert alert-success">✓ Job submitted: <strong>${d.job_id}</strong></div>`;
+    document.getElementById('enc-path').value = '';
+    loadJobs();
+  } catch(e) {
+    document.getElementById('enc-alert').innerHTML = `<div class="alert alert-error">✗ ${e.message}</div>`;
+  }
+  spinner.style.display = 'none';
+}
+
+async function loadJobs() {
+  const filter = document.getElementById('job-filter').value;
+  const url = filter ? `${API}/jobs?status=${filter}` : `${API}/jobs`;
+  try {
+    const r = await fetch(url);
+    const jobs = await r.json();
+    const arr = Array.isArray(jobs) ? jobs : [];
+    if(arr.length === 0) {
+      document.getElementById('jobs-table').innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0">No jobs found.</div>';
+      return;
+    }
+    document.getElementById('jobs-table').innerHTML = `
+      <table>
+        <thead><tr><th>Job ID</th><th>Video</th><th>Codec</th><th>Status</th><th>Progress</th><th>Created</th></tr></thead>
+        <tbody>${arr.map(j => `
+          <tr>
+            <td style="font-family:monospace;font-size:12px">${j.job_id}</td>
+            <td style="color:var(--text2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.video_path||'—'}</td>
+            <td>${(j.codec||'—').toUpperCase()}</td>
+            <td><span class="badge badge-${j.status||'queued'}">${j.status||'—'}</span></td>
+            <td style="min-width:100px">
+              <div style="font-size:12px">${j.progress||0}%</div>
+              <div class="progress"><div class="progress-bar" style="width:${j.progress||0}%"></div></div>
+            </td>
+            <td style="color:var(--text3);font-size:12px">${(j.created_at||'').substring(0,16)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) {
+    document.getElementById('jobs-table').innerHTML = '<div style="color:var(--danger);font-size:13px">Failed to load jobs.</div>';
+  }
+}
+
+async function loadQueueStats() {
+  try {
+    const r = await fetch(API + '/queue/stats');
+    const s = await r.json();
+    document.getElementById('queue-stats').innerHTML = `
+      <div class="mtag"><div class="mlabel">Backend</div><div class="mval">${s.backend||'json'}</div></div>
+      <div class="mtag"><div class="mlabel">Total</div><div class="mval">${s.total||0}</div></div>
+      <div class="mtag"><div class="mlabel">Queued</div><div class="mval">${s.queued||0}</div></div>
+      <div class="mtag"><div class="mlabel">Processing</div><div class="mval">${s.processing||0}</div></div>
+      <div class="mtag"><div class="mlabel">Completed</div><div class="mval">${s.completed||0}</div></div>
+      <div class="mtag"><div class="mlabel">Failed</div><div class="mval">${s.failed||0}</div></div>
+    `;
+  } catch(e) {
+    document.getElementById('queue-stats').innerHTML = '<div style="color:var(--danger);font-size:13px">Failed to load stats.</div>';
+  }
+}
+
+// ── ABR ────────────────────────────────────────────────────────────────────────
+const DEFAULT_VARIANTS = [
+  {name:'360p',bitrate_mbps:0.8,width:640,height:360},
+  {name:'480p',bitrate_mbps:1.5,width:854,height:480},
+  {name:'720p',bitrate_mbps:3.0,width:1280,height:720},
+  {name:'1080p',bitrate_mbps:5.0,width:1920,height:1080},
+];
+function initVariants() {
+  document.getElementById('variant-list').innerHTML = DEFAULT_VARIANTS.map((v,i) => `
+    <div class="stat" style="font-size:12px">
+      <div style="font-weight:600;color:var(--accent);margin-bottom:8px">${v.name}</div>
+      <div style="color:var(--text2)">${v.width}×${v.height}</div>
+      <div style="color:var(--text3)">${v.bitrate_mbps} Mbps</div>
+    </div>`).join('');
+}
+
+async function runABR() {
+  const spinner = document.getElementById('abr-spinner');
+  spinner.style.display = 'inline-block';
+  document.getElementById('abr-alert').innerHTML = '<div class="alert alert-info">⏳ Running simulation...</div>';
+  try {
+    const r = await fetch(API + '/abr/simulation');
+    if(!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    renderABR(d);
+    document.getElementById('abr-alert').innerHTML = '<div class="alert alert-success">✓ Simulation complete</div>';
+    document.getElementById('abr-results-card').style.display = 'block';
+  } catch(e) {
+    document.getElementById('abr-alert').innerHTML = `<div class="alert alert-error">✗ ${e.message}</div>`;
+  }
+  spinner.style.display = 'none';
+}
+
+function renderABR(results) {
+  if(!Array.isArray(results) || results.length === 0) {
+    document.getElementById('abr-results').innerHTML = '<div style="color:var(--text3)">No results.</div>';
+    return;
+  }
+  const maxBw = Math.max(...results.map(r => r.bandwidth_mbps||0));
+  document.getElementById('abr-results').innerHTML = `
+    <table>
+      <thead><tr><th>Scenario</th><th>Bandwidth</th><th>Low Buffer</th><th>Normal Buffer</th><th>High Buffer</th></tr></thead>
+      <tbody>${results.map(r => {
+        const sel = r.quality_selections || [];
+        return `<tr>
+          <td style="font-weight:500">${r.scenario||'—'}</td>
+          <td>
+            <div style="font-size:13px">${(r.bandwidth_mbps||0).toFixed(1)} Mbps</div>
+            <div class="progress" style="width:120px"><div class="progress-bar" style="width:${(r.bandwidth_mbps/maxBw*100).toFixed(0)}%"></div></div>
+          </td>
+          ${sel.map(s => `<td><span style="color:var(--accent2);font-weight:500">${s.selected_quality||'—'}</span><br><span style="font-size:11px;color:var(--text3)">${(s.buffer_level||0).toFixed(1)}s buf</span></td>`).join('')}
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── Costs ─────────────────────────────────────────────────────────────────────
+async function runCostCompare() {
+  const size = parseFloat(document.getElementById('cost-size').value);
+  const dur  = parseFloat(document.getElementById('cost-duration').value);
+  const views= parseInt(document.getElementById('cost-views').value);
+  if(!size||!dur||!views) { document.getElementById('cost-alert').innerHTML='<div class="alert alert-error">Fill in all fields</div>'; return; }
+  const spinner = document.getElementById('cost-spinner');
+  spinner.style.display = 'inline-block';
+  document.getElementById('cost-alert').innerHTML = '<div class="alert alert-info">⏳ Calculating...</div>';
+  try {
+    const url = `${API}/cost/compare?video_size_gb=${size}&video_duration_minutes=${dur}&monthly_views=${views}`;
+    const r = await fetch(url, { method: 'POST' });
+    if(!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    renderCosts(d.costs || []);
+    document.getElementById('cost-alert').innerHTML = '<div class="alert alert-success">✓ Done</div>';
+    document.getElementById('cost-results-card').style.display = 'block';
+  } catch(e) {
+    document.getElementById('cost-alert').innerHTML = `<div class="alert alert-error">✗ ${e.message}</div>`;
+  }
+  spinner.style.display = 'none';
+}
+
+function renderCosts(costs) {
+  if(!costs.length) { document.getElementById('cost-results').innerHTML='No data.'; return; }
+  const max = Math.max(...costs.map(c => c.annual_total_usd||0));
+  document.getElementById('cost-results').innerHTML = costs.map((c,i) => `
+    <div class="cost-row">
+      <div class="cost-label">
+        ${i===0 ? '🏆 ' : ''}<strong>${c.provider_name||c.provider}</strong> · ${(c.codec||'').toUpperCase()}
+        ${i===0 ? '<span class="badge badge-completed" style="margin-left:6px">BEST</span>' : ''}
+      </div>
+      <div class="cost-bar-wrap">
+        <div class="cost-bar ${i===0?'best':''}" style="width:${Math.max(8,(c.annual_total_usd/max)*300)}px"></div>
+      </div>
+      <div class="cost-val">$${(c.annual_total_usd||0).toFixed(2)}/yr</div>
+    </div>`).join('');
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+async function loadMetrics() {
+  try {
+    const r = await fetch(API + '/metrics');
+    const text = await r.text();
+    document.getElementById('metrics-output').textContent = text;
+    // Parse a few key metrics for cards
+    const lines = text.split('\n').filter(l => !l.startsWith('#') && l.trim());
+    const parsed = {};
+    lines.forEach(l => { const [k,v] = l.split(' '); if(k && v) parsed[k] = v; });
+    const keys = Object.keys(parsed).slice(0, 6);
+    document.getElementById('metrics-cards').innerHTML = keys.map(k => `
+      <div class="stat"><div class="stat-label" style="word-break:break-all">${k.replace(/_/g,' ')}</div><div class="stat-value" style="font-size:18px">${parsed[k]}</div></div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('metrics-output').textContent = 'Failed to load metrics: ' + e.message;
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initVariants();
+loadOverview();
+setInterval(checkHealth, 30000);
+</script>
+</body>
+</html>

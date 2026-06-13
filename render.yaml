@@ -11,15 +11,15 @@ services:
           type: redis
           name: nanostream-redis
           property: connectionString
-      - key: R2_ACCOUNT_ID
+      - key: B2_KEY_ID
         sync: false
-      - key: R2_ACCESS_KEY_ID
+      - key: B2_APPLICATION_KEY
         sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET
+      - key: B2_BUCKET
         value: nanostream
-      - key: R2_PUBLIC_URL
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_PUBLIC_URL
         sync: false
       - key: ENVIRONMENT
         value: production

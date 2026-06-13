@@ -1,29 +1,35 @@
 """
 NanoStream Cloud Storage
-Upload HLS packages to Cloudflare R2 and serve via public URL.
+Upload HLS packages to Backblaze B2 and serve via public URL.
 
-Why Cloudflare R2:
-    - Zero egress fees (vs AWS S3 $0.085/GB)
+Why Backblaze B2:
+    - No credit card required to sign up
+    - Free tier: 10 GB storage, 1 GB/day download
     - S3-compatible API (boto3 works unchanged)
-    - Built-in CDN via Workers
-    - Free tier: 10GB storage, 1M requests/month
+    - Very cheap beyond free tier ($0.006/GB storage, $0.01/GB download)
 
 Setup:
-    1. Create Cloudflare account → R2 → New bucket → 'nanostream'
-    2. R2 → Manage R2 API tokens → Create token (Object Read & Write)
-    3. Copy Account ID from R2 dashboard
-    4. Set environment variables:
+    1. Go to https://www.backblaze.com/sign-up/cloud-storage
+    2. Sign up — no card needed
+    3. Buckets → Create a Bucket → name: 'nanostream', set to Public
+    4. Account → App Keys → Add a New Application Key
+       - Name: nanostream
+       - Access: Read and Write
+       - Bucket: nanostream
+    5. Copy the values shown (only shown once):
+       - keyID       → B2_KEY_ID
+       - applicationKey → B2_APPLICATION_KEY
+    6. Bucket page → Bucket Settings → copy the Endpoint
+       e.g. s3.us-west-004.backblazeb2.com  → B2_ENDPOINT
+    7. Set environment variables:
 
-       export R2_ACCOUNT_ID=your_account_id
-       export R2_ACCESS_KEY_ID=your_access_key
-       export R2_SECRET_ACCESS_KEY=your_secret_key
-       export R2_BUCKET=nanostream
-       export R2_PUBLIC_URL=https://pub-xxxx.r2.dev  # from R2 public access settings
-
-Alternatives:
-    AWS S3:  Change endpoint_url to None, use standard boto3
-    GCP GCS: Use google-cloud-storage library instead
-    Azure:   Use azure-storage-blob library
+       B2_KEY_ID=your_key_id
+       B2_APPLICATION_KEY=your_application_key
+       B2_BUCKET=nanostream
+       B2_ENDPOINT=s3.us-west-004.backblazeb2.com
+       B2_PUBLIC_URL=https://f004.backblazeb2.com/file/nanostream
+       # Public URL format: https://<endpoint-short>.backblazeb2.com/file/<bucket>
+       # e.g. if endpoint is s3.us-west-004, short = f004
 """
 
 import os
@@ -36,59 +42,55 @@ logger = logging.getLogger(__name__)
 
 
 class CloudStorage:
-    """Upload and manage HLS packages on Cloudflare R2 (S3-compatible)."""
+    """Upload and manage HLS packages on Backblaze B2 (S3-compatible API)."""
 
     def __init__(self):
         """Initialize from environment variables."""
-        self.account_id       = os.environ.get('R2_ACCOUNT_ID')
-        self.access_key       = os.environ.get('R2_ACCESS_KEY_ID')
-        self.secret_key       = os.environ.get('R2_SECRET_ACCESS_KEY')
-        self.bucket           = os.environ.get('R2_BUCKET', 'nanostream')
-        self.public_url       = os.environ.get('R2_PUBLIC_URL', '').rstrip('/')
-        self.configured       = bool(self.account_id and self.access_key and self.secret_key)
+        self.key_id          = os.environ.get('B2_KEY_ID')
+        self.app_key         = os.environ.get('B2_APPLICATION_KEY')
+        self.bucket          = os.environ.get('B2_BUCKET', 'nanostream')
+        self.endpoint        = os.environ.get('B2_ENDPOINT', '')   # e.g. s3.us-west-004.backblazeb2.com
+        self.public_url      = os.environ.get('B2_PUBLIC_URL', '').rstrip('/')
+        self.configured      = bool(self.key_id and self.app_key and self.endpoint)
 
         if self.configured:
             self._client = self._make_client()
-            logger.info(f"R2 storage configured: bucket={self.bucket}")
+            logger.info(f"B2 storage configured: bucket={self.bucket}")
         else:
             self._client = None
             logger.warning(
-                "R2 not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, "
-                "R2_SECRET_ACCESS_KEY environment variables."
+                "Backblaze B2 not configured. Set B2_KEY_ID, B2_APPLICATION_KEY, "
+                "B2_ENDPOINT environment variables. Storage uploads will be skipped."
             )
 
     def _make_client(self):
-        """Create boto3 S3 client pointed at Cloudflare R2."""
+        """Create boto3 S3 client pointed at Backblaze B2."""
         try:
             import boto3
             return boto3.client(
                 's3',
-                endpoint_url=f'https://{self.account_id}.r2.cloudflarestorage.com',
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
-                region_name='auto',
+                endpoint_url=f'https://{self.endpoint}',
+                aws_access_key_id=self.key_id,
+                aws_secret_access_key=self.app_key,
+                region_name='us-east-1',  # B2 ignores region but boto3 requires a value
             )
         except ImportError:
             logger.error("boto3 not installed. Run: pip install boto3")
             return None
 
-    def upload_hls_package(
-        self,
-        hls_dir: str,
-        video_id: str,
-    ) -> Optional[Dict]:
+    def upload_hls_package(self, hls_dir: str, video_id: str) -> Optional[Dict]:
         """
-        Upload complete HLS package to R2.
+        Upload complete HLS package to Backblaze B2.
 
         Args:
             hls_dir: Local directory containing master.m3u8 and variant folders
-            video_id: Unique ID for this video (used as R2 prefix)
+            video_id: Unique ID for this video (used as key prefix)
 
         Returns:
             Dict with public URLs, or None if upload failed
         """
         if not self.configured or not self._client:
-            logger.error("R2 not configured. Cannot upload.")
+            logger.warning("B2 not configured — skipping cloud upload.")
             return None
 
         hls_path = Path(hls_dir)
@@ -99,59 +101,53 @@ class CloudStorage:
         uploaded = []
         failed = []
 
-        # Upload all files in HLS directory
         for file_path in sorted(hls_path.rglob('*')):
             if not file_path.is_file():
                 continue
 
-            # R2 key = video_id/relative_path
             relative = file_path.relative_to(hls_path)
-            r2_key = f"videos/{video_id}/{relative}"
-
+            b2_key = f"videos/{video_id}/{relative}".replace('\\', '/')
             content_type = self._get_content_type(file_path)
 
             try:
                 self._client.upload_file(
                     str(file_path),
                     self.bucket,
-                    r2_key,
+                    b2_key,
                     ExtraArgs={
                         'ContentType': content_type,
                         'CacheControl': self._get_cache_control(file_path),
                     }
                 )
-                uploaded.append(r2_key)
-                logger.debug(f"Uploaded: {r2_key}")
+                uploaded.append(b2_key)
+                logger.debug(f"Uploaded: {b2_key}")
 
             except Exception as e:
-                logger.error(f"Failed to upload {r2_key}: {e}")
-                failed.append(r2_key)
+                logger.error(f"Failed to upload {b2_key}: {e}")
+                failed.append(b2_key)
 
         if failed:
             logger.warning(f"{len(failed)} files failed to upload")
 
         master_url = f"{self.public_url}/videos/{video_id}/master.m3u8"
-        player_url = f"{self.public_url}/player.html?v={video_id}"
-
         logger.info(f"Uploaded {len(uploaded)} files for video {video_id}")
         logger.info(f"Master playlist: {master_url}")
 
         return {
             'video_id': video_id,
             'master_url': master_url,
-            'player_url': player_url,
             'files_uploaded': len(uploaded),
             'files_failed': len(failed),
             'bucket': self.bucket,
+            'provider': 'backblaze-b2',
         }
 
     def delete_video(self, video_id: str) -> bool:
-        """Delete all files for a video from R2."""
+        """Delete all files for a video from B2."""
         if not self.configured or not self._client:
             return False
 
         try:
-            # List all objects with this video prefix
             prefix = f"videos/{video_id}/"
             paginator = self._client.get_paginator('list_objects_v2')
 
@@ -164,9 +160,8 @@ class CloudStorage:
                 logger.warning(f"No files found for video: {video_id}")
                 return False
 
-            # Delete in batches of 1000
             for i in range(0, len(keys), 1000):
-                batch = keys[i:i+1000]
+                batch = keys[i:i + 1000]
                 self._client.delete_objects(
                     Bucket=self.bucket,
                     Delete={'Objects': batch}
@@ -190,7 +185,6 @@ class CloudStorage:
 
             for page in paginator.paginate(Bucket=self.bucket, Prefix='videos/', Delimiter='/'):
                 for prefix in page.get('CommonPrefixes', []):
-                    # Extract video_id from 'videos/VIDEO_ID/'
                     parts = prefix['Prefix'].strip('/').split('/')
                     if len(parts) >= 2:
                         video_ids.add(parts[1])
@@ -207,7 +201,6 @@ class CloudStorage:
 
     @staticmethod
     def _get_content_type(file_path: Path) -> str:
-        """Get correct MIME type for HLS files."""
         suffix = file_path.suffix.lower()
         types = {
             '.m3u8': 'application/x-mpegURL',
@@ -219,15 +212,11 @@ class CloudStorage:
 
     @staticmethod
     def _get_cache_control(file_path: Path) -> str:
-        """
-        Set aggressive caching for segments (immutable),
-        shorter TTL for manifests (may update).
-        """
         suffix = file_path.suffix.lower()
         if suffix == '.ts':
-            return 'public, max-age=31536000, immutable'   # 1 year for segments
+            return 'public, max-age=31536000, immutable'
         elif suffix == '.m3u8':
-            return 'public, max-age=5'                      # 5s for playlists
+            return 'public, max-age=5'
         return 'public, max-age=86400'
 
 
@@ -237,26 +226,10 @@ class DeploymentManager:
     def __init__(self):
         self.storage = CloudStorage()
 
-    def deploy_video(
-        self,
-        video_path: str,
-        video_id: str = None,
-        max_resolution: str = '1080p',
-    ) -> Optional[Dict]:
+    def deploy_video(self, video_path: str, video_id: str = None,
+                     max_resolution: str = '1080p') -> Optional[Dict]:
         """
-        Full deployment pipeline:
-        1. Analyze content
-        2. Generate HLS package
-        3. Upload to R2
-        4. Return public URL
-
-        Args:
-            video_path: Local video path
-            video_id: Optional custom ID (auto-generated if None)
-            max_resolution: Max resolution to encode
-
-        Returns:
-            Deployment info with public URL
+        Full pipeline: analyze → generate HLS → upload to B2 → return public URL.
         """
         import uuid
         from analyzer import ContentAnalyzer
@@ -266,12 +239,10 @@ class DeploymentManager:
 
         video_id = video_id or uuid.uuid4().hex[:10]
 
-        # Step 1: Analyze
         logger.info(f"[1/3] Analyzing {video_path}...")
         analyzer = ContentAnalyzer()
         analysis = analyzer.analyze(video_path)
 
-        # Step 2: Generate HLS
         logger.info(f"[2/3] Generating HLS package...")
         cap = cv2.VideoCapture(video_path)
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -283,16 +254,14 @@ class DeploymentManager:
 
         gen = HLSGenerator(output_dir=hls_dir)
         pkg = gen.generate_hls_package(
-            video_path, ladder,
-            content_type=analysis['content_type']
+            video_path, ladder, content_type=analysis['content_type']
         )
 
         if not pkg:
             logger.error("HLS generation failed")
             return None
 
-        # Step 3: Upload
-        logger.info(f"[3/3] Uploading to Cloudflare R2...")
+        logger.info(f"[3/3] Uploading to Backblaze B2...")
         result = self.storage.upload_hls_package(hls_dir, video_id)
 
         if result:
@@ -303,7 +272,6 @@ class DeploymentManager:
         return result
 
     def undeploy_video(self, video_id: str) -> bool:
-        """Remove video from cloud storage."""
         return self.storage.delete_video(video_id)
 
 
@@ -313,21 +281,18 @@ if __name__ == '__main__':
     storage = CloudStorage()
 
     if not storage.configured:
-        print("\nR2 not configured. To set up:")
-        print("  1. Create Cloudflare account")
-        print("  2. Go to R2 → Create bucket 'nanostream'")
-        print("  3. Create API token with Object Read & Write")
+        print("\nBackblaze B2 not configured. To set up (no card needed):")
+        print("  1. Sign up free: https://www.backblaze.com/sign-up/cloud-storage")
+        print("  2. Buckets → Create bucket 'nanostream' (set Public)")
+        print("  3. Account → App Keys → Add New Application Key")
         print("  4. Set environment variables:")
-        print("     export R2_ACCOUNT_ID=your_account_id")
-        print("     export R2_ACCESS_KEY_ID=your_key")
-        print("     export R2_SECRET_ACCESS_KEY=your_secret")
-        print("     export R2_BUCKET=nanostream")
-        print("     export R2_PUBLIC_URL=https://pub-xxxx.r2.dev")
-        print("\nThen run:")
-        print("  python cloud_storage.py")
-        print("  python cli.py full video.mp4 --deploy")
+        print("     B2_KEY_ID=your_key_id")
+        print("     B2_APPLICATION_KEY=your_app_key")
+        print("     B2_BUCKET=nanostream")
+        print("     B2_ENDPOINT=s3.us-west-004.backblazeb2.com")
+        print("     B2_PUBLIC_URL=https://f004.backblazeb2.com/file/nanostream")
     else:
         videos = storage.list_videos()
-        print(f"\nVideos in R2 ({storage.bucket}): {len(videos)}")
+        print(f"\nVideos in B2 ({storage.bucket}): {len(videos)}")
         for v in videos:
             print(f"  {v}: {storage.get_public_url(v)}")

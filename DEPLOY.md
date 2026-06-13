@@ -1,16 +1,15 @@
 # Deploying NanoStream to Render (Free Tier)
 
-Everything runs free on Render:
-- **Web service** — FastAPI + uvicorn (Docker)
-- **Redis** — Render managed Redis (free plan, 25 MB)
-- **Cloudflare R2** — HLS video storage, 10 GB free + zero egress fees
+Everything runs free — no credit card needed for storage:
+- **Web service** — FastAPI + uvicorn (Docker) on Render
+- **Redis** — Render managed Redis (free, 25 MB)
+- **Backblaze B2** — HLS video storage, 10 GB free, NO card required
 
 ---
 
 ## Step 1 — Push to GitHub
 
 ```bash
-# From the nanostream folder
 git init
 git add .
 git commit -m "initial commit"
@@ -19,54 +18,54 @@ git remote add origin https://github.com/YOUR_USERNAME/nanostream.git
 git push -u origin main
 ```
 
-> Make sure `.env` is in `.gitignore` (it is) — never push secrets.
+---
+
+## Step 2 — Deploy on Render
+
+1. Go to https://render.com → sign up (requires card for identity, won't charge on free tier)
+2. New → **Blueprint** → connect your GitHub repo
+3. Render detects `render.yaml` and creates:
+   - `nanostream-api` web service
+   - `nanostream-redis` Redis instance
+4. Click **Apply** — live in ~5 mins at `https://nanostream-api.onrender.com`
 
 ---
 
-## Step 2 — Create Render account
+## Step 3 — Set up Backblaze B2 (free video storage, NO card)
 
-Go to https://render.com and sign up (free, no credit card required).
+1. Sign up at https://www.backblaze.com/sign-up/cloud-storage
+2. **Buckets** → **Create a Bucket**
+   - Bucket name: `nanostream`
+   - Files in bucket: **Public**
+   - Click Create Bucket
+3. Open the bucket → note the **Endpoint** (e.g. `s3.us-west-004.backblazeb2.com`)
+4. **Account** (top right) → **App Keys** → **Add a New Application Key**
+   - Name: `nanostream`
+   - Allow access to bucket: `nanostream`
+   - Type of access: **Read and Write**
+   - Click Create
+   - **Copy both values immediately** (shown only once):
+     - `keyID` → this is your `B2_KEY_ID`
+     - `applicationKey` → this is your `B2_APPLICATION_KEY`
+5. Work out your public URL:
+   - Endpoint like `s3.us-west-004.backblazeb2.com` → region number is `004`
+   - Public URL = `https://f004.backblazeb2.com/file/nanostream`
 
 ---
 
-## Step 3 — Deploy with render.yaml (Blueprint)
-
-1. In Render dashboard → **New** → **Blueprint**
-2. Connect your GitHub repo
-3. Render will detect `render.yaml` and create:
-   - `nanostream-api` (web service)
-   - `nanostream-redis` (Redis instance)
-4. Click **Apply**
-
-That's it — your app will be live at:
-`https://nanostream-api.onrender.com`
-
----
-
-## Step 4 — Set optional environment variables
+## Step 4 — Add B2 environment variables to Render
 
 In Render dashboard → `nanostream-api` → **Environment**:
 
-| Variable | Value | Purpose |
-|---|---|---|
-| `R2_ACCOUNT_ID` | from Cloudflare | Required for video CDN delivery |
-| `R2_ACCESS_KEY_ID` | from Cloudflare | R2 API key |
-| `R2_SECRET_ACCESS_KEY` | from Cloudflare | R2 API secret |
-| `R2_BUCKET` | `nanostream` | R2 bucket name |
-| `R2_PUBLIC_URL` | `https://pub-xxxx.r2.dev` | CDN URL from R2 public access |
+| Variable | Example value |
+|---|---|
+| `B2_KEY_ID` | `004abc123...` |
+| `B2_APPLICATION_KEY` | `K004xyz...` |
+| `B2_BUCKET` | `nanostream` |
+| `B2_ENDPOINT` | `s3.us-west-004.backblazeb2.com` |
+| `B2_PUBLIC_URL` | `https://f004.backblazeb2.com/file/nanostream` |
 
-`REDIS_URL` is set **automatically** by Render from the Redis service — don't set it manually.
-
----
-
-## Step 5 — Set up Cloudflare R2 (free video CDN)
-
-1. Go to https://dash.cloudflare.com → **R2**
-2. Create bucket named `nanostream`
-3. Enable **Public Access** on the bucket → copy the public URL
-4. Go to **Manage R2 API Tokens** → Create token with "Object Read & Write"
-5. Copy Account ID, Access Key, Secret Key
-6. Paste into Render environment variables (Step 4)
+`REDIS_URL` is set **automatically** by Render — don't touch it.
 
 ---
 
@@ -76,42 +75,22 @@ In Render dashboard → `nanostream-api` → **Environment**:
 |---|---|---|
 | GET | `/` | API info |
 | GET | `/health` | Health check |
-| POST | `/analyze` | Upload and analyze video |
+| POST | `/analyze` | Upload & analyze video |
 | POST | `/encode` | Submit encoding job |
 | GET | `/jobs` | List all jobs |
-| GET | `/jobs/{id}` | Get job status |
-| GET | `/queue/stats` | Queue statistics |
+| GET | `/jobs/{id}` | Job status |
+| GET | `/queue/stats` | Queue stats |
 | POST | `/cost/compare` | Compare codec costs |
-| GET | `/abr/simulation` | Simulate ABR behavior |
+| GET | `/abr/simulation` | Simulate ABR |
 | GET | `/metrics` | Prometheus metrics |
 
-Interactive docs at: `https://nanostream-api.onrender.com/docs`
+Interactive docs: `https://nanostream-api.onrender.com/docs`
 
 ---
 
-## Notes on Free Tier Limits
+## Free Tier Notes
 
-- Free web service **spins down after 15 min of inactivity** (cold start ~30s)
-- Free Redis: 25 MB max — fine for job tracking, not video storage
-- No persistent disk on free tier — uploaded videos are ephemeral
-  - Use the `/analyze` endpoint with small test files
-  - Large video storage → Cloudflare R2
-- No Celery worker on free tier → job queue uses the built-in JSON fallback automatically
-
-## Upgrading
-
-To run Celery workers (parallel encoding), add a worker service to `render.yaml`:
-```yaml
-  - type: worker
-    name: nanostream-worker
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerCommand: celery -A job_queue worker --loglevel=info --concurrency=2
-    plan: starter  # $7/month
-    envVars:
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: nanostream-redis
-          property: connectionString
-```
+- Free web service spins down after 15 min inactivity (cold start ~30s on next request)
+- Free Redis: 25 MB — fine for job tracking
+- No persistent disk on Render free tier — B2 handles video persistence
+- No Celery worker on free tier — job queue uses JSON fallback automatically

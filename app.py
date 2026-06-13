@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()  # loads .env file in dev; no-op in production
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -59,11 +59,32 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.get("/")
 async def root():
-    """API root."""
+    """API root — redirect to dashboard."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/dashboard")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    """Serve the NanoStream economics dashboard."""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "economics_dashboard.html")
+    if os.path.exists(dashboard_path):
+        with open(dashboard_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Dashboard not found</h1>", status_code=404)
+
+
+@app.get("/api")
+async def api_info():
+    """API info."""
     return {
         "name": "NanoStream",
         "version": "1.0.0",
-        "description": "Adaptive video delivery platform API"
+        "description": "Adaptive video delivery platform API",
+        "docs": "/docs",
+        "dashboard": "/dashboard",
+        "health": "/health",
+        "metrics": "/metrics",
     }
 
 

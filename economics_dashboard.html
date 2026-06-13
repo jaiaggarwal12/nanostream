@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NanoStream — Viewer Economics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --color-bg: #ffffff;
+    --color-bg-secondary: #f5f5f4;
+    --color-text: #1a1a19;
+    --color-text-secondary: #6b6b69;
+    --color-text-tertiary: #9b9b98;
+    --color-border: rgba(0,0,0,0.12);
+    --color-success-bg: #eaf3de;
+    --color-success-text: #3b6d11;
+    --color-danger-bg: #fcebeb;
+    --color-danger-text: #a32d2d;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-bg: #1e1e1c;
+      --color-bg-secondary: #2a2a28;
+      --color-text: #e8e8e5;
+      --color-text-secondary: #9b9b98;
+      --color-text-tertiary: #6b6b69;
+      --color-border: rgba(255,255,255,0.12);
+      --color-success-bg: #173404;
+      --color-success-text: #c0dd97;
+      --color-danger-bg: #501313;
+      --color-danger-text: #f09595;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--color-bg-secondary);
+    color: var(--color-text);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+  .header { margin-bottom: 2rem; }
+  .header h1 { font-size: 24px; font-weight: 500; }
+  .header p { font-size: 14px; color: var(--color-text-secondary); margin-top: 4px; }
+  .card {
+    background: var(--color-bg);
+    border: 0.5px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  h3 {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 1rem;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .metric {
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    text-align: center;
+  }
+  .metric-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+  .metric-value { font-size: 22px; font-weight: 500; }
+  .metric-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  .ctrl label { font-size: 13px; color: var(--color-text-secondary); display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .ctrl label span { font-weight: 500; color: var(--color-text); }
+  input[type=range] { width: 100%; accent-color: #378ADD; }
+  .cost-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 0.5px solid var(--color-border); font-size: 13px; }
+  .cost-lbl { min-width: 190px; color: var(--color-text-secondary); }
+  .cost-bar { height: 6px; border-radius: 3px; background: #378ADD; }
+  .cost-bar.best { background: #1D9E75; }
+  .cost-bar.worst { background: #E24B4A; }
+  .cost-val { margin-left: auto; font-weight: 500; min-width: 70px; text-align: right; }
+  .tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-weight: 500; }
+  .tag-best { background: var(--color-success-bg); color: var(--color-success-text); }
+  .tag-worst { background: var(--color-danger-bg); color: var(--color-danger-text); }
+  .tab-row { display: flex; gap: 4px; margin-bottom: 1rem; }
+  .tab { background: none; border: 0.5px solid var(--color-border); border-radius: var(--radius-sm); padding: 5px 14px; font-size: 13px; cursor: pointer; color: var(--color-text-secondary); }
+  .tab.active { background: var(--color-bg-secondary); color: var(--color-text); font-weight: 500; }
+  .qrow { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+  .qlabel { min-width: 120px; color: var(--color-text-secondary); }
+  .qbar { height: 8px; border-radius: 4px; }
+  .qval { margin-left: auto; color: var(--color-text-tertiary); font-size: 12px; }
+  .best-badge {
+    display: inline-block;
+    font-size: 13px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+    font-weight: 500;
+  }
+  footer { text-align: center; font-size: 12px; color: var(--color-text-tertiary); margin-top: 2rem; }
+  @media (max-width: 640px) {
+    .grid4 { grid-template-columns: repeat(2, 1fr); }
+    .controls { grid-template-columns: 1fr; }
+    .cost-lbl { min-width: 140px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+    <div>
+      <h1>NanoStream</h1>
+      <p>viewer economics dashboard — adjust parameters to see live cost and delivery analysis</p>
+    </div>
+    <div id="best-badge" class="best-badge"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <h3>parameters</h3>
+    <div class="controls">
+      <div class="ctrl">
+        <label>monthly viewers <span id="lbl-v">10,000</span></label>
+        <input type="range" id="sl-v" min="100" max="100000" step="100" value="10000">
+      </div>
+      <div class="ctrl">
+        <label>video size (GB) <span id="lbl-s">1.5 GB</span></label>
+        <input type="range" id="sl-s" min="0.1" max="10" step="0.1" value="1.5">
+      </div>
+      <div class="ctrl">
+        <label>duration (min) <span id="lbl-d">120 min</span></label>
+        <input type="range" id="sl-d" min="1" max="300" step="1" value="120">
+      </div>
+      <div class="ctrl">
+        <label>resolutions <span id="lbl-r">4</span></label>
+        <input type="range" id="sl-r" min="1" max="6" step="1" value="4">
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="grid4" style="margin-bottom:1.25rem">
+    <div class="metric"><div class="metric-label">cheapest option</div><div class="metric-value" id="kpi-cost">—</div><div class="metric-sub" id="kpi-cost-sub">—</div></div>
+    <div class="metric"><div class="metric-label">annual savings</div><div class="metric-value" id="kpi-save">—</div><div class="metric-sub">vs most expensive</div></div>
+    <div class="metric"><div class="metric-label">AV1 compression</div><div class="metric-value">4.2×</div><div class="metric-sub">vs raw YUV</div></div>
+    <div class="metric"><div class="metric-label">monthly egress</div><div class="metric-value" id="kpi-egress">—</div><div class="metric-sub">GB delivered</div></div>
+  </div>
+
+  <!-- Cost ranking -->
+  <div class="card">
+    <h3>annual cost — all providers × codecs</h3>
+    <div id="cost-bars"></div>
+  </div>
+
+  <!-- Breakdown chart -->
+  <div class="card">
+    <h3>cost breakdown: storage · bandwidth · transcoding (top 8)</h3>
+    <div style="position:relative;width:100%;height:280px">
+      <canvas id="breakdown" role="img" aria-label="Stacked bar chart: storage, bandwidth, and transcoding costs for top 8 provider-codec combos"></canvas>
+    </div>
+    <div id="legend" style="display:flex;gap:16px;margin-top:12px;font-size:12px;color:var(--color-text-secondary)"></div>
+  </div>
+
+  <!-- Viewer simulation -->
+  <div class="card">
+    <h3>viewer simulation — 10,000 users across 5 regions</h3>
+    <div class="tab-row">
+      <button class="tab active" onclick="tab('quality',this)">quality distribution</button>
+      <button class="tab" onclick="tab('device',this)">device mix</button>
+      <button class="tab" onclick="tab('region',this)">region mix</button>
+      <button class="tab" onclick="tab('kpis',this)">delivery kpis</button>
+    </div>
+    <div id="pane-quality"></div>
+    <div id="pane-device" style="display:none"></div>
+    <div id="pane-region" style="display:none"></div>
+    <div id="pane-kpis" style="display:none"></div>
+  </div>
+
+  <footer>NanoStream · Adaptive Video Delivery Platform · Data reflects real AWS / GCP / Azure / Cloudflare 2024 pricing</footer>
+</div>
+
+<script>
+const P = {
+  aws:        {name:'AWS',        s:0.023,bw:0.085,tc:{h264:0.015,h265:0.030,av1:0.075}},
+  gcp:        {name:'GCP',        s:0.020,bw:0.080,tc:{h264:0.012,h265:0.024,av1:0.060}},
+  azure:      {name:'Azure',      s:0.018,bw:0.087,tc:{h264:0.0145,h265:0.029,av1:0.058}},
+  cloudflare: {name:'Cloudflare', s:0.015,bw:0.000,tc:{h264:0.005,h265:0.010,av1:0.025}},
+};
+const COMP = {h264:0.40,h265:0.28,av1:0.24};
+const CODECS = ['h264','h265','av1'];
+const PROVIDERS = ['aws','gcp','azure','cloudflare'];
+
+let chart = null;
+
+function calc(v,s,d,r) {
+  const rows = [];
+  for (const pk of PROVIDERS) for (const c of CODECS) {
+    const cs=s*COMP[c], stored=cs*r;
+    const annS=stored*P[pk].s*12;
+    const eg=v*cs*0.70;
+    const annB=eg*P[pk].bw*12;
+    const tc=d*r*P[pk].tc[c];
+    rows.push({pk,name:P[pk].name,c,cs,annS,annB,tc,total:annS+annB+tc,eg});
+  }
+  rows.sort((a,b)=>a.total-b.total);
+  const worst=rows[rows.length-1].total;
+  rows.forEach(r=>r.sav=(worst-r.total)/worst*100);
+  return rows;
+}
+
+function fmt(n){return n<1?'<$1':'$'+Math.round(n).toLocaleString();}
+function fmtGb(n){return n>=1000?(n/1000).toFixed(1)+'K':Math.round(n)+'';}
+
+function renderBars(rows) {
+  const max=rows[rows.length-1].total;
+  document.getElementById('cost-bars').innerHTML=rows.map((r,i)=>{
+    const isBest=i===0,isWorst=i===rows.length-1;
+    const pct=Math.max(5,(r.total/max)*100);
+    const cls=isBest?'best':isWorst?'worst':'';
+    const tag=isBest?'<span class="tag tag-best">best</span>':isWorst?'<span class="tag tag-worst">worst</span>':'';
+    return `<div class="cost-row">
+      <div class="cost-lbl">${r.name} · ${r.c.toUpperCase()}${tag}</div>
+      <div class="cost-bar ${cls}" style="width:${pct}%"></div>
+      <div class="cost-val">${fmt(r.total)}/yr</div>
+    </div>`;
+  }).join('');
+}
+
+function renderChart(rows) {
+  const top=rows.slice(0,8);
+  const labels=top.map(r=>r.name.split(' ')[0]+'\n'+r.c.toUpperCase());
+  if(chart){chart.destroy();chart=null;}
+  chart=new Chart(document.getElementById('breakdown'),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Storage',data:top.map(r=>+r.annS.toFixed(2)),backgroundColor:'#B5D4F4',stack:'s'},
+      {label:'Bandwidth',data:top.map(r=>+r.annB.toFixed(2)),backgroundColor:'#378ADD',stack:'s'},
+      {label:'Transcoding',data:top.map(r=>+r.tc.toFixed(2)),backgroundColor:'#185FA5',stack:'s'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'$'+c.parsed.y.toFixed(2)}}},
+      scales:{
+        x:{ticks:{font:{size:11},color:'#888780',autoSkip:false,maxRotation:30},grid:{display:false}},
+        y:{ticks:{callback:v=>'$'+v,font:{size:11},color:'#888780'},grid:{color:'rgba(128,128,128,0.12)'}}
+      }
+    }
+  });
+  document.getElementById('legend').innerHTML=[['Storage','#B5D4F4'],['Bandwidth','#378ADD'],['Transcoding','#185FA5']]
+    .map(([l,c])=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:${c}"></span>${l}</span>`).join('');
+}
+
+function renderKPIs(rows) {
+  const best=rows[0],worst=rows[rows.length-1];
+  document.getElementById('kpi-cost').textContent=fmt(best.total);
+  document.getElementById('kpi-cost-sub').textContent=best.name+' · '+best.c.toUpperCase();
+  document.getElementById('kpi-save').textContent=fmt(worst.total-best.total);
+  document.getElementById('kpi-egress').textContent=fmtGb(best.eg)+' GB';
+  document.getElementById('best-badge').textContent='✓ Best: '+best.name+' + '+best.c.toUpperCase();
+}
+
+// Simulation panes (static representative data)
+const SIM={
+  quality:{'360p':{pct:13.4,c:'#B4B2A9'},'480p':{pct:3.2,c:'#888780'},'720p':{pct:48.0,c:'#378ADD'},'1080p':{pct:35.4,c:'#1D9E75'}},
+  device:{mobile:{pct:54.2,c:'#D85A30'},desktop:{pct:30.8,c:'#378ADD'},smart_tv:{pct:15.0,c:'#1D9E75'}},
+  region:{north_america:{pct:30.4,c:'#378ADD'},western_europe:{pct:24.8,c:'#534AB7'},asia_pacific:{pct:30.0,c:'#1D9E75'},latin_america:{pct:7.9,c:'#D85A30'},africa_middle_east:{pct:6.9,c:'#888780'}},
+};
+
+function simBars(data) {
+  const max=Math.max(...Object.values(data).map(d=>d.pct));
+  return Object.entries(data).map(([k,{pct,c}])=>
+    `<div class="qrow"><div class="qlabel">${k.replace(/_/g,' ')}</div><div class="qbar" style="width:${Math.max(10,pct/max*260)}px;background:${c}"></div><div class="qval">${pct}%</div></div>`
+  ).join('');
+}
+
+function initTabs() {
+  document.getElementById('pane-quality').innerHTML=simBars(SIM.quality);
+  document.getElementById('pane-device').innerHTML=simBars(SIM.device);
+  document.getElementById('pane-region').innerHTML=simBars(SIM.region);
+  document.getElementById('pane-kpis').innerHTML=`<div class="grid2" style="gap:10px">
+    <div class="metric"><div class="metric-label">avg startup delay</div><div class="metric-value">2.57s</div><div class="metric-sub">p95: 6.00s</div></div>
+    <div class="metric"><div class="metric-label">rebuffer rate</div><div class="metric-value">8.6%</div><div class="metric-sub">avg 20.3s when stalling</div></div>
+    <div class="metric"><div class="metric-label">avg bitrate served</div><div class="metric-value">3.37 Mbps</div><div class="metric-sub">weighted by device</div></div>
+    <div class="metric"><div class="metric-label">completion rate</div><div class="metric-value">64.7%</div><div class="metric-sub">mobile 55%, smart TV 85%</div></div>
+  </div>`;
+}
+
+function tab(name, btn) {
+  document.querySelectorAll('[id^="pane-"]').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('pane-'+name).style.display='block';
+  btn.classList.add('active');
+}
+
+function update() {
+  const v=+document.getElementById('sl-v').value;
+  const s=+document.getElementById('sl-s').value;
+  const d=+document.getElementById('sl-d').value;
+  const r=+document.getElementById('sl-r').value;
+  document.getElementById('lbl-v').textContent=v.toLocaleString();
+  document.getElementById('lbl-s').textContent=s.toFixed(1)+' GB';
+  document.getElementById('lbl-d').textContent=d+' min';
+  document.getElementById('lbl-r').textContent=r;
+  const rows=calc(v,s,d,r);
+  renderKPIs(rows);
+  renderBars(rows);
+  renderChart(rows);
+}
+
+['sl-v','sl-s','sl-d','sl-r'].forEach(id=>document.getElementById(id).addEventListener('input',update));
+initTabs();
+update();
+</script>
+</body>
+</html>

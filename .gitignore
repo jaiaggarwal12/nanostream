@@ -1,0 +1,39 @@
+# Secrets — never commit these
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pkl
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Generated output (large binary files)
+uploads/
+hls_output/
+nanostream_results/
+dataset/
+queue_state.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

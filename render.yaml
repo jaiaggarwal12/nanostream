@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: nanostream-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: nanostream-redis
+          property: connectionString
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: nanostream
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: info
+
+  - type: redis
+    name: nanostream-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

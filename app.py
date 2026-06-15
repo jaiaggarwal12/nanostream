@@ -190,6 +190,13 @@ async def encode_video(
         )
         metrics.job_submitted(codec)
         
+        # Auto-process in JSON fallback mode (no Celery worker available)
+        if job_queue.backend == 'json':
+            import threading
+            def _process():
+                job_queue.run_next()
+            threading.Thread(target=_process, daemon=True).start()
+        
         return {
             'job_id': job_id,
             'status': 'submitted',

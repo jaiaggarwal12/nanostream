@@ -1,4 +1,4 @@
-"""
+﻿"""
 NanoStream FastAPI Backend
 Web API for video analysis, encoding, and streaming
 """
@@ -92,6 +92,22 @@ async def api_info():
     }
 
 
+@app.get("/uploads")
+async def list_uploads():
+    """List uploaded video files available for encoding."""
+    files = []
+    if os.path.exists(UPLOAD_DIR):
+        for f in os.listdir(UPLOAD_DIR):
+            filepath = os.path.join(UPLOAD_DIR, f)
+            if os.path.isfile(filepath):
+                files.append({
+                    'filename': f,
+                    'path': filepath,
+                    'size_mb': round(os.path.getsize(filepath) / 1024 / 1024, 2),
+                })
+    return {'uploads': files, 'upload_dir': UPLOAD_DIR}
+
+
 @app.post("/analyze")
 async def analyze_video(file: UploadFile = File(...)):
     """Analyze video content.
@@ -147,12 +163,21 @@ async def encode_video(
         if not video_path:
             raise ValueError("video_path required")
         
+        # Resolve path — check if it's in uploads directory
+        if not os.path.isabs(video_path):
+            video_path = os.path.join(UPLOAD_DIR, video_path)
+        if not os.path.exists(video_path):
+            raise ValueError(f"Video file not found: {video_path}. Upload a video first via /analyze, then use the filename.")
+        
         # Generate bitrate ladder
         import cv2
         cap = cv2.VideoCapture(video_path)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         cap.release()
+        
+        if width == 0 or height == 0:
+            raise ValueError(f"Could not read video dimensions from: {video_path}. File may be corrupted or unsupported.")
         
         ladder_gen = BitrateLadder(width, height)
         resolutions = ladder_gen.generate(max_resolution=max_resolution)
@@ -292,3 +317,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

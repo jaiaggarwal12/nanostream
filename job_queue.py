@@ -219,6 +219,7 @@ class JobQueue:
             'started_at': None,
             'completed_at': None,
             'celery_task_id': None,
+            'stream_url': None,
             'error': None,
         }
 
@@ -302,10 +303,25 @@ class JobQueue:
                 job['resolutions'],
                 content_type=job['content_type'],
             )
+
+            # Auto-upload to Backblaze B2 if configured (survives restarts)
+            stream_url = None
+            try:
+                from cloud_storage import CloudStorage
+                storage = CloudStorage()
+                if storage.configured:
+                    upload = storage.upload_hls_package(job['output_dir'], job_id)
+                    if upload:
+                        stream_url = upload.get('master_url')
+                        logger.info(f"Job {job_id} uploaded to B2: {stream_url}")
+            except Exception as upload_exc:
+                logger.warning(f"B2 upload skipped: {upload_exc}")
+
             self._json_queue.update(job_id,
                 status='completed',
                 progress=100,
                 completed_at=datetime.utcnow().isoformat(),
+                stream_url=stream_url,
             )
             logger.info(f"Job {job_id} completed")
         except Exception as exc:

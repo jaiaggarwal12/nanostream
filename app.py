@@ -92,6 +92,20 @@ async def api_info():
     }
 
 
+@app.get("/debug/env")
+async def debug_env():
+    """Check which storage env vars are set (values hidden)."""
+    import os as _os
+    return {
+        "B2_KEY_ID":          bool(_os.environ.get("B2_KEY_ID")),
+        "B2_APPLICATION_KEY": bool(_os.environ.get("B2_APPLICATION_KEY")),
+        "B2_BUCKET":          _os.environ.get("B2_BUCKET", "NOT SET"),
+        "B2_ENDPOINT":        _os.environ.get("B2_ENDPOINT", "NOT SET"),
+        "B2_PUBLIC_URL":      _os.environ.get("B2_PUBLIC_URL", "NOT SET"),
+        "REDIS_URL":          bool(_os.environ.get("REDIS_URL")),
+    }
+
+
 @app.get("/uploads")
 async def list_uploads():
     """List uploaded video files available for encoding."""

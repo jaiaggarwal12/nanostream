@@ -310,12 +310,20 @@ class JobQueue:
                 from cloud_storage import CloudStorage
                 storage = CloudStorage()
                 if storage.configured:
+                    logger.info(f"Uploading job {job_id} to B2 bucket={storage.bucket}")
                     upload = storage.upload_hls_package(job['output_dir'], job_id)
                     if upload:
                         stream_url = upload.get('master_url')
-                        logger.info(f"Job {job_id} uploaded to B2: {stream_url}")
+                        logger.info(f"Job {job_id} B2 upload complete: {stream_url}")
+                    else:
+                        logger.error(f"Job {job_id} B2 upload returned None")
+                else:
+                    logger.warning(f"Job {job_id} B2 not configured — stream will be local only. "
+                                   f"B2_KEY_ID set: {bool(_os.environ.get('B2_KEY_ID'))}, "
+                                   f"B2_APPLICATION_KEY set: {bool(_os.environ.get('B2_APPLICATION_KEY'))}, "
+                                   f"B2_ENDPOINT set: {bool(_os.environ.get('B2_ENDPOINT'))}")
             except Exception as upload_exc:
-                logger.warning(f"B2 upload skipped: {upload_exc}")
+                logger.error(f"B2 upload failed for job {job_id}: {upload_exc}")
 
             self._json_queue.update(job_id,
                 status='completed',

@@ -108,6 +108,49 @@ async def list_uploads():
     return {'uploads': files, 'upload_dir': UPLOAD_DIR}
 
 
+@app.get("/stream/{job_id}")
+async def stream_player(job_id: str):
+    """Serve an HLS video player for a completed job."""
+    hls_dir = f"./hls_output/{job_id}"
+    master = os.path.join(hls_dir, "master.m3u8")
+    if not os.path.exists(master):
+        raise HTTPException(status_code=404, detail=f"HLS output not found for job {job_id}. Job may not be completed or files were lost on restart.")
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NanoStream Player — {job_id}</title>
+<link href="https://cdn.jsdelivr.net/npm/video.js@8/dist/video-js.min.css" rel="stylesheet">
+<style>body{{margin:0;background:#0f1117;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;color:#e8eaf0}}
+.wrap{{max-width:900px;width:95%}}.info{{margin-top:16px;font-size:13px;color:#8b90a7}}h2{{font-size:18px;margin-bottom:12px;color:#4f8ef7}}</style>
+</head><body><div class="wrap">
+<h2>⚡ NanoStream Player</h2>
+<video-js id="player" class="vjs-default-skin vjs-big-play-centered" controls preload="auto" width="100%" height="480"
+  data-setup='{{"fluid":true}}'>
+  <source src="/hls/{job_id}/master.m3u8" type="application/x-mpegURL">
+</video-js>
+<div class="info">Job: {job_id} · Adaptive HLS stream · H.265 multi-resolution</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/video.js@8/dist/video.min.js"></script>
+</body></html>"""
+    return HTMLResponse(content=html)
+
+
+@app.get("/hls/{job_id}/{path:path}")
+async def serve_hls(job_id: str, path: str):
+    """Serve HLS files (m3u8 playlists and .ts segments)."""
+    file_path = os.path.join("./hls_output", job_id, path)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    content_types = {
+        '.m3u8': 'application/vnd.apple.mpegurl',
+        '.ts': 'video/MP2T',
+        '.mp4': 'video/mp4',
+    }
+    ext = os.path.splitext(file_path)[1].lower()
+    media_type = content_types.get(ext, 'application/octet-stream')
+    return FileResponse(file_path, media_type=media_type)
+
+
 @app.post("/analyze")
 async def analyze_video(file: UploadFile = File(...)):
     """Analyze video content.
